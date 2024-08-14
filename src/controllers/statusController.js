@@ -17,7 +17,7 @@ httpRouting.get('/:statusCode', (req, res) => {
     const statusCode = parseInt(req.params.statusCode, 10);
     const isJson = req.query.json !== undefined;
 
-    if (isNaN(statusCode) || statusCode < 100 || statusCode > 599) {
+    if (isNaN(statusCode) || statusCode < 200 || statusCode > 599) {
         const errorMessage = 'Please provide a valid HTTP status code between 100 and 599.';
         
         if (isBrowser(req) && !isJson) {
@@ -44,7 +44,7 @@ httpRouting.post('/:statusCode', (req, res) => {
     const statusCode = parseInt(req.params.statusCode, 10);
     const isJson = req.query.json !== undefined;
 
-    if (isNaN(statusCode) || statusCode < 100 || statusCode > 599) {
+    if (isNaN(statusCode) || statusCode < 200 || statusCode > 599) {
         const errorMessage = 'Please provide a valid HTTP status code between 100 and 599.';
         
         if (isBrowser(req) && !isJson) {

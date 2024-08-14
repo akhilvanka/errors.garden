@@ -18,7 +18,8 @@ app.get('/', (req, res) => {
 
 // Ping-Pong 
 app.get('/ping', (req, res) => {
-    res.send("pong")
+    res.set('Content-Type', 'text/plain');
+    res.send("pong");
 });
 // HTTP status code route
 app.use('/http', httpRouting);
