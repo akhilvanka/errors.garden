@@ -1,0 +1,20 @@
+name: errors-garden
+version: 0.1.0
+synopsis: A garden of errors - error emulation service
+
+dependencies:
+  - base >= 4.7 && < 5
+  - network
+  - bytestring
+  - text
+  - containers
+  - time
+
+ghc-options:
+  - -Wall
+  - -O2
+
+executables:
+  errors-garden:
+    main: Main.hs
+    source-dirs: src
