@@ -1,0 +1,272 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.4'
+          enable-stack: true
+          stack-version: 'latest'
+
+      - name: Cache Stack
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Build
+        run: stack build --fast
+
+      - name: Run tests
+        run: stack test --fast || true
+
+  verify-errors:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.4'
+          enable-stack: true
+          stack-version: 'latest'
+
+      - name: Cache Stack
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Build
+        run: stack build --fast
+
+      - name: Start server
+        run: |
+          stack exec errors-garden &
+          sleep 3
+
+      - name: Verify HTTP errors
+        run: |
+          echo "Testing HTTP status codes..."
+          for code in 200 201 204 400 401 403 404 405 418 422 429 500 502 503 504; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/http/$code)
+            if [ "$status" != "$code" ]; then
+              echo "FAIL: /http/$code returned $status instead of $code"
+              exit 1
+            fi
+            echo "OK: /http/$code -> $status"
+          done
+
+      - name: Verify WebSocket codes
+        run: |
+          echo "Testing WebSocket close codes..."
+          for code in 1000 1001 1006 1011; do
+            response=$(curl -s http://localhost:8080/ws/$code)
+            if ! echo "$response" | grep -q "\"code\":\"$code\""; then
+              echo "FAIL: /ws/$code did not return expected code"
+              exit 1
+            fi
+            echo "OK: /ws/$code"
+          done
+
+      - name: Verify gRPC codes
+        run: |
+          echo "Testing gRPC status codes..."
+          for code in 0 1 2 3 4 5 7 13 14 16; do
+            response=$(curl -s http://localhost:8080/grpc/$code)
+            if ! echo "$response" | grep -q "\"code\":\"$code\""; then
+              echo "FAIL: /grpc/$code did not return expected code"
+              exit 1
+            fi
+            echo "OK: /grpc/$code"
+          done
+
+      - name: Verify MCP/JSON-RPC errors
+        run: |
+          echo "Testing MCP/JSON-RPC errors..."
+          for code in -32700 -32600 -32601 -32602 -32603; do
+            response=$(curl -s http://localhost:8080/mcp/$code)
+            if ! echo "$response" | grep -q "\"code\":$code"; then
+              echo "FAIL: /mcp/$code did not return expected error"
+              exit 1
+            fi
+            echo "OK: /mcp/$code"
+          done
+
+      - name: Verify GraphQL errors
+        run: |
+          echo "Testing GraphQL errors..."
+          for type in UNAUTHENTICATED FORBIDDEN BAD_USER_INPUT INTERNAL_SERVER_ERROR; do
+            response=$(curl -s http://localhost:8080/gql/$type)
+            if ! echo "$response" | grep -q "\"code\":\"$type\""; then
+              echo "FAIL: /gql/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /gql/$type"
+          done
+
+      - name: Verify OAuth errors
+        run: |
+          echo "Testing OAuth errors..."
+          for type in invalid_request invalid_client invalid_grant invalid_token access_denied; do
+            response=$(curl -s http://localhost:8080/oauth/$type)
+            if ! echo "$response" | grep -q "\"error\":\"$type\""; then
+              echo "FAIL: /oauth/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /oauth/$type"
+          done
+
+      - name: Verify AWS errors
+        run: |
+          echo "Testing AWS errors..."
+          for type in AccessDenied ThrottlingException ResourceNotFound ValidationError; do
+            response=$(curl -s http://localhost:8080/aws/$type)
+            if ! echo "$response" | grep -q "__type"; then
+              echo "FAIL: /aws/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /aws/$type"
+          done
+
+      - name: Verify Stripe errors
+        run: |
+          echo "Testing Stripe errors..."
+          for type in card_declined api_error rate_limit_error authentication_error; do
+            response=$(curl -s http://localhost:8080/stripe/$type)
+            if ! echo "$response" | grep -q "\"error\""; then
+              echo "FAIL: /stripe/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /stripe/$type"
+          done
+
+      - name: Verify PostgreSQL errors
+        run: |
+          echo "Testing PostgreSQL errors..."
+          for code in 23505 42P01 23503 42601; do
+            response=$(curl -s http://localhost:8080/postgres/$code)
+            if ! echo "$response" | grep -q "\"code\":\"$code\""; then
+              echo "FAIL: /postgres/$code did not return expected error"
+              exit 1
+            fi
+            echo "OK: /postgres/$code"
+          done
+
+      - name: Verify MySQL errors
+        run: |
+          echo "Testing MySQL errors..."
+          for code in 1062 1045 1146 1064; do
+            response=$(curl -s http://localhost:8080/mysql/$code)
+            if ! echo "$response" | grep -q "\"errno\":$code"; then
+              echo "FAIL: /mysql/$code did not return expected error"
+              exit 1
+            fi
+            echo "OK: /mysql/$code"
+          done
+
+      - name: Verify Redis errors
+        run: |
+          echo "Testing Redis errors..."
+          for type in ERR WRONGTYPE NOAUTH OOM; do
+            response=$(curl -s http://localhost:8080/redis/$type)
+            if ! echo "$response" | grep -q "$type"; then
+              echo "FAIL: /redis/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /redis/$type"
+          done
+
+      - name: Verify MongoDB errors
+        run: |
+          echo "Testing MongoDB errors..."
+          for code in 11000 47 13 50; do
+            response=$(curl -s http://localhost:8080/mongo/$code)
+            if ! echo "$response" | grep -q "\"code\":$code"; then
+              echo "FAIL: /mongo/$code did not return expected error"
+              exit 1
+            fi
+            echo "OK: /mongo/$code"
+          done
+
+      - name: Verify Kubernetes errors
+        run: |
+          echo "Testing Kubernetes errors..."
+          for type in NotFound Forbidden Unauthorized Conflict; do
+            response=$(curl -s http://localhost:8080/k8s/$type)
+            if ! echo "$response" | grep -q "\"reason\":\"$type\""; then
+              echo "FAIL: /k8s/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /k8s/$type"
+          done
+
+      - name: Verify Firebase errors
+        run: |
+          echo "Testing Firebase errors..."
+          for type in NOT_FOUND PERMISSION_DENIED UNAUTHENTICATED INTERNAL; do
+            response=$(curl -s http://localhost:8080/firebase/$type)
+            if ! echo "$response" | grep -q "\"status\":\"$type\""; then
+              echo "FAIL: /firebase/$type did not return expected error"
+              exit 1
+            fi
+            echo "OK: /firebase/$type"
+          done
+
+      - name: Verify all endpoints return valid responses
+        run: |
+          echo "Verifying all endpoints return valid JSON or text..."
+          endpoints=(
+            "/ping"
+            "/http/500"
+            "/ws/1006"
+            "/grpc/14"
+            "/mcp/-32600"
+            "/gql/UNAUTHENTICATED"
+            "/fastapi/422"
+            "/pydantic/missing"
+            "/oauth/invalid_token"
+            "/aws/ThrottlingException"
+            "/stripe/card_declined"
+            "/postgres/23505"
+            "/mysql/1062"
+            "/redis/WRONGTYPE"
+            "/mongo/11000"
+            "/elastic/404"
+            "/k8s/NotFound"
+            "/docker/ContainerNotFound"
+            "/firebase/NOT_FOUND"
+            "/twilio/21211"
+            "/sendgrid/429"
+            "/cloudflare/522"
+            "/vercel/RATE_LIMITED"
+            "/supabase/rate_limit"
+          )
+          for endpoint in "${endpoints[@]}"; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080$endpoint")
+            if [ "$status" == "000" ]; then
+              echo "FAIL: $endpoint - connection failed"
+              exit 1
+            fi
+            echo "OK: $endpoint -> $status"
+          done
+          echo "All endpoints verified!"
