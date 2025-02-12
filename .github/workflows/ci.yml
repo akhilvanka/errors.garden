@@ -232,6 +232,40 @@ jobs:
             echo "OK: /firebase/$type"
           done
 
+      - name: Verify HTCPCP (Coffee Pot) errors
+        run: |
+          echo "Testing HTCPCP (RFC 2324) errors..."
+          # Test 418 I'm a teapot
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/htcpcp/418)
+          if [ "$status" != "418" ]; then
+            echo "FAIL: /htcpcp/418 returned $status instead of 418"
+            exit 1
+          fi
+          echo "OK: /htcpcp/418 -> $status (I'm a teapot)"
+          # Test teapot string
+          response=$(curl -s http://localhost:8080/htcpcp/teapot)
+          if ! echo "$response" | grep -q "teapot"; then
+            echo "FAIL: /htcpcp/teapot did not return teapot response"
+            exit 1
+          fi
+          echo "OK: /htcpcp/teapot"
+          # Test milk additions
+          for addition in cream oat-milk soy-milk; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/htcpcp/$addition")
+            if [ "$status" != "406" ]; then
+              echo "FAIL: /htcpcp/$addition returned $status instead of 406"
+              exit 1
+            fi
+            echo "OK: /htcpcp/$addition -> 406 Not Acceptable"
+          done
+          # Test service unavailable
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/htcpcp/empty)
+          if [ "$status" != "503" ]; then
+            echo "FAIL: /htcpcp/empty returned $status instead of 503"
+            exit 1
+          fi
+          echo "OK: /htcpcp/empty -> 503 Service Unavailable"
+
       - name: Verify all endpoints return valid responses
         run: |
           echo "Verifying all endpoints return valid JSON or text..."
@@ -260,6 +294,9 @@ jobs:
             "/cloudflare/522"
             "/vercel/RATE_LIMITED"
             "/supabase/rate_limit"
+            "/htcpcp/418"
+            "/htcpcp/teapot"
+            "/coffee/empty"
           )
           for endpoint in "${endpoints[@]}"; do
             status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080$endpoint")

@@ -87,6 +87,8 @@ routeGet path = case BS.unpack path of
   '/':'c':'l':'o':'u':'d':'f':'l':'a':'r':'e':'/':c -> cloudflareErr c
   '/':'v':'e':'r':'c':'e':'l':'/':c -> vercelErr c
   '/':'s':'u':'p':'a':'b':'a':'s':'e':'/':c -> supabaseErr c
+  '/':'h':'t':'c':'p':'c':'p':'/':c -> htcpcpErr c
+  '/':'c':'o':'f':'f':'e':'e':'/':c -> htcpcpErr c
   _ -> resp 404 "text/plain" "not found"
 
 httpErr :: String -> ByteString
@@ -203,6 +205,15 @@ vercelErr t = let (n, d, c) = lkpS t vercelCodes (t, "Vercel error", 400)
 supabaseErr :: String -> ByteString
 supabaseErr t = let (n, d, c) = lkpS t supabaseCodes (t, "Supabase error", 400)
                 in resp c "application/json" $ BS.pack $ "{\"code\":\"" ++ n ++ "\",\"msg\":\"" ++ d ++ "\"}"
+
+htcpcpErr :: String -> ByteString
+htcpcpErr s = case reads s of
+  [(code, "")] -> let (n, d) = lkp code htcpcpCodes ("Unknown", "Unknown HTCPCP error")
+                      body = BS.pack $ n ++ "\n\n" ++ d
+                  in resp code "message/coffeepot" body
+  _ -> case lkpS s htcpcpStrCodes ("", "", 0) of
+         ("", _, _) -> resp 400 "message/coffeepot" "invalid coffee request"
+         (n, d, c) -> resp c "message/coffeepot" $ BS.pack $ n ++ "\n\n" ++ d
 
 lkp :: Ord k => k -> Map k v -> v -> v
 lkp k m d = Map.findWithDefault d k m
@@ -1168,7 +1179,63 @@ supabaseCodes = Map.fromList
   ]
 
 --------------------------------------------------------------------------------
--- HTML Pages (pierre.computer style with split pane)
+-- HTCPCP (Hyper Text Coffee Pot Control Protocol) - RFC 2324 & RFC 7168
+--------------------------------------------------------------------------------
+htcpcpCodes :: Map Int (String, String)
+htcpcpCodes = Map.fromList
+  [ (418, ("I'm a teapot", "The server is a teapot and cannot brew coffee (RFC 2324)"))
+  , (300, ("Multiple Choices", "Multiple coffee types available"))
+  , (400, ("Bad Request", "Malformed coffee request"))
+  , (403, ("Forbidden", "Coffee brewing is forbidden"))
+  , (404, ("Not Found", "No coffee pot found at this URI"))
+  , (406, ("Not Acceptable", "The requested addition is not available"))
+  , (408, ("Request Timeout", "Coffee brewing timed out"))
+  , (410, ("Gone", "The coffee pot has been permanently removed"))
+  , (418, ("I'm a teapot", "The server refuses to brew coffee because it is a teapot"))
+  , (500, ("Internal Server Error", "Coffee pot malfunction"))
+  , (503, ("Service Unavailable", "Coffee pot is temporarily out of service"))
+  ]
+
+htcpcpStrCodes :: Map String (String, String, Int)
+htcpcpStrCodes = Map.fromList
+  -- RFC 2324 additions
+  [ ("teapot", ("I'm a teapot", "This server is a teapot, not a coffee pot", 418))
+  , ("no-coffee", ("I'm a teapot", "The requested entity body is short and stout", 418))
+  -- Milk-related errors (RFC 7168)
+  , ("cream", ("Not Acceptable", "Cream is not available", 406))
+  , ("half-and-half", ("Not Acceptable", "Half-and-half is not available", 406))
+  , ("whole-milk", ("Not Acceptable", "Whole milk is not available", 406))
+  , ("skim-milk", ("Not Acceptable", "Skim milk is not available", 406))
+  , ("oat-milk", ("Not Acceptable", "Oat milk is not available", 406))
+  , ("almond-milk", ("Not Acceptable", "Almond milk is not available", 406))
+  , ("soy-milk", ("Not Acceptable", "Soy milk is not available", 406))
+  -- Sweetener errors
+  , ("sugar", ("Not Acceptable", "Sugar is not available", 406))
+  , ("sweetener", ("Not Acceptable", "Artificial sweetener is not available", 406))
+  , ("honey", ("Not Acceptable", "Honey is not available", 406))
+  -- Brewing errors
+  , ("empty", ("Service Unavailable", "Coffee pot is empty", 503))
+  , ("brewing", ("Service Unavailable", "Coffee is currently brewing, please wait", 503))
+  , ("overflow", ("Internal Server Error", "Coffee pot overflow detected", 500))
+  , ("grounds", ("Internal Server Error", "Coffee grounds container is full", 500))
+  , ("water", ("Service Unavailable", "Water reservoir is empty", 503))
+  , ("filter", ("Service Unavailable", "Coffee filter needs replacement", 503))
+  , ("descale", ("Service Unavailable", "Coffee pot needs descaling", 503))
+  , ("hot", ("Service Unavailable", "Coffee pot is too hot, cooling down", 503))
+  , ("cold", ("Service Unavailable", "Coffee pot is heating up, please wait", 503))
+  -- Pot status
+  , ("off", ("Service Unavailable", "Coffee pot is turned off", 503))
+  , ("unplugged", ("Service Unavailable", "Coffee pot is unplugged", 503))
+  , ("missing", ("Not Found", "Coffee pot has been removed", 404))
+  , ("stolen", ("Gone", "Coffee pot has been permanently removed (stolen)", 410))
+  -- Authentication
+  , ("unauthorized", ("Unauthorized", "Coffee brewing requires authentication", 401))
+  , ("forbidden", ("Forbidden", "You are not allowed to brew coffee", 403))
+  , ("quota", ("Too Many Requests", "Daily coffee quota exceeded", 429))
+  ]
+
+--------------------------------------------------------------------------------
+-- HTML Pages
 --------------------------------------------------------------------------------
 homePage :: ByteString
 homePage = BS.pack $ unlines
@@ -1230,6 +1297,7 @@ homePage = BS.pack $ unlines
   , "- <a class=\"service\" data-target=\"cloudflare\">/cloudflare/{code}</a> - cloudflare<br>"
   , "- <a class=\"service\" data-target=\"vercel\">/vercel/{code}</a> - vercel<br>"
   , "- <a class=\"service\" data-target=\"supabase\">/supabase/{code}</a> - supabase<br>"
+  , "- <a class=\"service\" data-target=\"htcpcp\">/htcpcp/{code}</a> - coffee pot protocol<br>"
   , "<br>"
   , "~~~"
   , "<br><br>"
@@ -1273,6 +1341,7 @@ refContent = unlines
   , refSect "cloudflare" "Cloudflare" "/cloudflare/{code}" $ map (\(c,(n,_)) -> (show c, n)) $ Map.toAscList cloudflareCodes
   , refSect "vercel" "Vercel" "/vercel/{code}" $ map (\(c,(n,_,_)) -> (c, n)) $ Map.toAscList vercelCodes
   , refSect "supabase" "Supabase" "/supabase/{code}" $ map (\(c,(n,_,_)) -> (c, n)) $ Map.toAscList supabaseCodes
+  , refSect "htcpcp" "HTCPCP" "/htcpcp/{code}" $ map (\(c,(n,_)) -> (show c, n)) (Map.toAscList htcpcpCodes) ++ map (\(c,(n,_,_)) -> (c, n)) (Map.toAscList htcpcpStrCodes)
   ]
 
 refSect :: String -> String -> String -> [(String, String)] -> String
@@ -1321,6 +1390,7 @@ errorsPage = BS.pack $ unlines
   , sectionCloudflare
   , sectionVercel
   , sectionSupabase
+  , sectionHtcpcp
   , ""
   , "<br>"
   , "~~~"
@@ -1334,7 +1404,7 @@ sectionHttp, sectionWs, sectionGrpc, sectionMcp, sectionGql :: String
 sectionFastapi, sectionPydantic, sectionOauth, sectionAws, sectionStripe :: String
 sectionPg, sectionMysql, sectionRedis, sectionMongo, sectionElastic :: String
 sectionK8s, sectionDocker, sectionFirebase, sectionTwilio, sectionSendgrid :: String
-sectionCloudflare, sectionVercel, sectionSupabase :: String
+sectionCloudflare, sectionVercel, sectionSupabase, sectionHtcpcp :: String
 
 sectionHttp = sect "HTTP" "/http/{code}" $ map (\(c,(n,_)) -> (show c, n)) $ Map.toAscList httpCodes
 sectionWs = sect "WebSocket" "/ws/{code}" $ map (\(c,(n,_)) -> (show c, n)) $ Map.toAscList wsCodes
@@ -1359,6 +1429,7 @@ sectionSendgrid = sect "SendGrid" "/sendgrid/{code}" $ map (\(c,(n,_)) -> (show 
 sectionCloudflare = sect "Cloudflare" "/cloudflare/{code}" $ map (\(c,(n,_)) -> (show c, n)) $ Map.toAscList cloudflareCodes
 sectionVercel = sect "Vercel" "/vercel/{code}" $ map (\(c,(n,_,_)) -> (c, n)) $ Map.toAscList vercelCodes
 sectionSupabase = sect "Supabase" "/supabase/{code}" $ map (\(c,(n,_,_)) -> (c, n)) $ Map.toAscList supabaseCodes
+sectionHtcpcp = sect "HTCPCP" "/htcpcp/{code}" $ map (\(c,(n,_)) -> (show c, n)) (Map.toAscList htcpcpCodes) ++ map (\(c,(n,_,_)) -> (c, n)) (Map.toAscList htcpcpStrCodes)
 
 sect :: String -> String -> [(String, String)] -> String
 sect name endpoint codes = unlines $
