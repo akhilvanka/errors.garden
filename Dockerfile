@@ -1,10 +1,12 @@
-FROM haskell:9.6-slim AS build
+FROM debian:bookworm AS build
 WORKDIR /app
-RUN apt-get update && apt-get install -y libgmp-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl gcc libgmp-dev libtinfo-dev make xz-utils zlib1g-dev && rm -rf /var/lib/apt/lists/*
+RUN curl -sSL https://get.haskellstack.org/ | sh
 COPY stack.yaml stack.yaml.lock package.yaml ./
-RUN stack build --only-dependencies --system-ghc
+RUN stack setup
+RUN stack build --only-dependencies
 COPY src ./src
-RUN stack build --system-ghc && stack install --system-ghc --local-bin-path /app/bin
+RUN stack build && stack install --local-bin-path /app/bin
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y libgmp10 ca-certificates && rm -rf /var/lib/apt/lists/*
