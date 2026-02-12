@@ -1,7 +1,7 @@
 FROM debian:bookworm AS build
 WORKDIR /app
-RUN apt-get update && apt-get install -y curl gcc libgmp-dev libtinfo-dev make xz-utils zlib1g-dev && rm -rf /var/lib/apt/lists/*
-RUN curl -sSL https://get.haskellstack.org/ | sh
+RUN apt-get update && apt-get install -y curl gcc g++ git gnupg libffi-dev libgmp-dev libtinfo-dev make netbase xz-utils zlib1g-dev && rm -rf /var/lib/apt/lists/*
+RUN curl -sSL https://get.haskellstack.org/ | sh -s - -f
 COPY stack.yaml stack.yaml.lock package.yaml ./
 RUN stack setup
 RUN stack build --only-dependencies
