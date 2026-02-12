@@ -113,98 +113,100 @@ grpcErr s = case reads s of
 mcpErr :: String -> ByteString
 mcpErr s = case reads s of
   [(code, "")] -> let (n, _) = lkp code mcpCodes ("Unknown", "Unknown")
-                  in resp 200 "application/json" $ BS.pack $ "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":" ++ show code ++ ",\"message\":\"" ++ n ++ "\"},\"id\":null}"
+                  in resp 200 "application/json" $ BS.pack $ "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":" ++ show code ++ ",\"message\":\"" ++ escapeJson n ++ "\"},\"id\":null}"
   _ -> resp 400 "text/plain" "invalid code"
 
 gqlErr :: String -> ByteString
 gqlErr t = let (n, d) = lkpS t gqlCodes (t, "Unknown error")
-           in resp 200 "application/json" $ BS.pack $ "{\"errors\":[{\"message\":\"" ++ d ++ "\",\"extensions\":{\"code\":\"" ++ n ++ "\"}}]}"
+           in resp 200 "application/json" $ BS.pack $ "{\"errors\":[{\"message\":\"" ++ escapeJson d ++ "\",\"extensions\":{\"code\":\"" ++ escapeJson n ++ "\"}}]}"
 
 awsErr :: String -> ByteString
 awsErr t = let (n, d, c) = lkpS t awsCodes (t, "Unknown error", 400)
-           in resp c "application/json" $ BS.pack $ "{\"__type\":\"" ++ n ++ "\",\"message\":\"" ++ d ++ "\"}"
+           in resp c "application/json" $ BS.pack $ "{\"__type\":\"" ++ escapeJson n ++ "\",\"message\":\"" ++ escapeJson d ++ "\"}"
 
 stripeErr :: String -> ByteString
 stripeErr t = let (n, d, c) = lkpS t stripeCodes (t, "Unknown error", 400)
-              in resp c "application/json" $ BS.pack $ "{\"error\":{\"type\":\"" ++ n ++ "\",\"message\":\"" ++ d ++ "\"}}"
+              in resp c "application/json" $ BS.pack $ "{\"error\":{\"type\":\"" ++ escapeJson n ++ "\",\"message\":\"" ++ escapeJson d ++ "\"}}"
 
 fastapiErr :: String -> ByteString
 fastapiErr s = case reads s of
   [(code, "")] -> let (n, d) = lkp code fastapiCodes ("Error", "Request error")
-                  in resp code "application/json" $ BS.pack $ "{\"detail\":[{\"type\":\"" ++ n ++ "\",\"msg\":\"" ++ d ++ "\"}]}"
+                  in resp code "application/json" $ BS.pack $ "{\"detail\":[{\"type\":\"" ++ escapeJson n ++ "\",\"msg\":\"" ++ escapeJson d ++ "\"}]}"
   _ -> resp 400 "application/json" "{\"detail\":\"invalid code\"}"
 
 pydanticErr :: String -> ByteString
 pydanticErr t = let (n, d) = lkpS t pydanticCodes (t, "Validation error")
-                in resp 422 "application/json" $ BS.pack $ "{\"detail\":[{\"type\":\"" ++ n ++ "\",\"msg\":\"" ++ d ++ "\",\"loc\":[\"body\"]}]}"
+                in resp 422 "application/json" $ BS.pack $ "{\"detail\":[{\"type\":\"" ++ escapeJson n ++ "\",\"msg\":\"" ++ escapeJson d ++ "\",\"loc\":[\"body\"]}]}"
 
 oauthErr :: String -> ByteString
 oauthErr t = let (n, d, c) = lkpS t oauthCodes (t, "OAuth error", 400)
-             in resp c "application/json" $ BS.pack $ "{\"error\":\"" ++ n ++ "\",\"error_description\":\"" ++ d ++ "\"}"
+             in resp c "application/json" $ BS.pack $ "{\"error\":\"" ++ escapeJson n ++ "\",\"error_description\":\"" ++ escapeJson d ++ "\"}"
 
 pgErr :: String -> ByteString
 pgErr t = let (n, d) = lkpS t pgCodes (t, "Database error")
-          in resp 500 "application/json" $ BS.pack $ "{\"code\":\"" ++ t ++ "\",\"name\":\"" ++ n ++ "\",\"message\":\"" ++ d ++ "\"}"
+          in resp 500 "application/json" $ BS.pack $ "{\"code\":\"" ++ escapeJson t ++ "\",\"name\":\"" ++ escapeJson n ++ "\",\"message\":\"" ++ escapeJson d ++ "\"}"
 
 mysqlErr :: String -> ByteString
 mysqlErr s = case reads s of
   [(code, "")] -> let (n, d) = lkp code mysqlCodes ("Error", "Database error")
-                  in resp 500 "application/json" $ BS.pack $ "{\"errno\":" ++ show code ++ ",\"sqlstate\":\"" ++ n ++ "\",\"message\":\"" ++ d ++ "\"}"
+                  in resp 500 "application/json" $ BS.pack $ "{\"errno\":" ++ show code ++ ",\"sqlstate\":\"" ++ escapeJson n ++ "\",\"message\":\"" ++ escapeJson d ++ "\"}"
   _ -> resp 400 "text/plain" "invalid code"
 
 redisErr :: String -> ByteString
 redisErr t = let (n, d) = lkpS t redisCodes (t, "Redis error")
-             in resp 500 "text/plain" $ BS.pack $ "-" ++ n ++ " " ++ d
+                 safeN = filter (\c -> c /= '\n' && c /= '\r') n
+                 safeD = filter (\c -> c /= '\n' && c /= '\r') d
+             in resp 500 "text/plain" $ BS.pack $ "-" ++ safeN ++ " " ++ safeD
 
 mongoErr :: String -> ByteString
 mongoErr s = case reads s of
   [(code, "")] -> let (n, d) = lkp code mongoCodes ("Error", "Database error")
-                  in resp 500 "application/json" $ BS.pack $ "{\"ok\":0,\"code\":" ++ show code ++ ",\"codeName\":\"" ++ n ++ "\",\"errmsg\":\"" ++ d ++ "\"}"
+                  in resp 500 "application/json" $ BS.pack $ "{\"ok\":0,\"code\":" ++ show code ++ ",\"codeName\":\"" ++ escapeJson n ++ "\",\"errmsg\":\"" ++ escapeJson d ++ "\"}"
   _ -> resp 400 "text/plain" "invalid code"
 
 elasticErr :: String -> ByteString
 elasticErr s = case reads s of
   [(code, "")] -> let (n, d) = lkp code elasticCodes ("error", "Elasticsearch error")
-                  in resp code "application/json" $ BS.pack $ "{\"error\":{\"type\":\"" ++ n ++ "\",\"reason\":\"" ++ d ++ "\"},\"status\":" ++ show code ++ "}"
+                  in resp code "application/json" $ BS.pack $ "{\"error\":{\"type\":\"" ++ escapeJson n ++ "\",\"reason\":\"" ++ escapeJson d ++ "\"},\"status\":" ++ show code ++ "}"
   _ -> resp 400 "text/plain" "invalid code"
 
 k8sErr :: String -> ByteString
 k8sErr t = let (n, d, c) = lkpS t k8sCodes (t, "Kubernetes error", 400)
-           in resp c "application/json" $ BS.pack $ "{\"kind\":\"Status\",\"apiVersion\":\"v1\",\"status\":\"Failure\",\"message\":\"" ++ d ++ "\",\"reason\":\"" ++ n ++ "\",\"code\":" ++ show c ++ "}"
+           in resp c "application/json" $ BS.pack $ "{\"kind\":\"Status\",\"apiVersion\":\"v1\",\"status\":\"Failure\",\"message\":\"" ++ escapeJson d ++ "\",\"reason\":\"" ++ escapeJson n ++ "\",\"code\":" ++ show c ++ "}"
 
 dockerErr :: String -> ByteString
 dockerErr t = let (n, d, c) = lkpS t dockerCodes (t, "Docker error", 500)
-              in resp c "application/json" $ BS.pack $ "{\"message\":\"" ++ d ++ "\",\"error\":\"" ++ n ++ "\"}"
+              in resp c "application/json" $ BS.pack $ "{\"message\":\"" ++ escapeJson d ++ "\",\"error\":\"" ++ escapeJson n ++ "\"}"
 
 firebaseErr :: String -> ByteString
 firebaseErr t = let (n, d, c) = lkpS t firebaseCodes (t, "Firebase error", 400)
-                in resp c "application/json" $ BS.pack $ "{\"error\":{\"code\":" ++ show c ++ ",\"message\":\"" ++ d ++ "\",\"status\":\"" ++ n ++ "\"}}"
+                in resp c "application/json" $ BS.pack $ "{\"error\":{\"code\":" ++ show c ++ ",\"message\":\"" ++ escapeJson d ++ "\",\"status\":\"" ++ escapeJson n ++ "\"}}"
 
 twilioErr :: String -> ByteString
 twilioErr s = case reads s of
   [(code, "")] -> let (n, d, c) = lkp code twilioCodes ("Error", "Twilio error", 400)
-                  in resp c "application/json" $ BS.pack $ "{\"code\":" ++ show code ++ ",\"message\":\"" ++ n ++ "\",\"more_info\":\"" ++ d ++ "\"}"
+                  in resp c "application/json" $ BS.pack $ "{\"code\":" ++ show code ++ ",\"message\":\"" ++ escapeJson n ++ "\",\"more_info\":\"" ++ escapeJson d ++ "\"}"
   _ -> resp 400 "text/plain" "invalid code"
 
 sendgridErr :: String -> ByteString
 sendgridErr s = case reads s of
   [(code, "")] -> let (n, d) = lkp code sendgridCodes ("error", "SendGrid error")
-                  in resp code "application/json" $ BS.pack $ "{\"errors\":[{\"message\":\"" ++ n ++ "\",\"field\":null,\"help\":\"" ++ d ++ "\"}]}"
+                  in resp code "application/json" $ BS.pack $ "{\"errors\":[{\"message\":\"" ++ escapeJson n ++ "\",\"field\":null,\"help\":\"" ++ escapeJson d ++ "\"}]}"
   _ -> resp 400 "text/plain" "invalid code"
 
 cloudflareErr :: String -> ByteString
 cloudflareErr s = case reads s of
   [(code, "")] -> let (n, d) = lkp code cloudflareCodes ("Error", "Cloudflare error")
-                  in resp code "text/html" $ BS.pack $ "<html><body><h1>" ++ show code ++ " " ++ n ++ "</h1><p>" ++ d ++ "</p></body></html>"
+                  in resp code "text/html" $ BS.pack $ "<html><body><h1>" ++ show code ++ " " ++ escapeHtml n ++ "</h1><p>" ++ escapeHtml d ++ "</p></body></html>"
   _ -> resp 400 "text/plain" "invalid code"
 
 vercelErr :: String -> ByteString
 vercelErr t = let (n, d, c) = lkpS t vercelCodes (t, "Vercel error", 400)
-              in resp c "application/json" $ BS.pack $ "{\"error\":{\"code\":\"" ++ n ++ "\",\"message\":\"" ++ d ++ "\"}}"
+              in resp c "application/json" $ BS.pack $ "{\"error\":{\"code\":\"" ++ escapeJson n ++ "\",\"message\":\"" ++ escapeJson d ++ "\"}}"
 
 supabaseErr :: String -> ByteString
 supabaseErr t = let (n, d, c) = lkpS t supabaseCodes (t, "Supabase error", 400)
-                in resp c "application/json" $ BS.pack $ "{\"code\":\"" ++ n ++ "\",\"msg\":\"" ++ d ++ "\"}"
+                in resp c "application/json" $ BS.pack $ "{\"code\":\"" ++ escapeJson n ++ "\",\"msg\":\"" ++ escapeJson d ++ "\"}"
 
 htcpcpErr :: String -> ByteString
 htcpcpErr s = case reads s of
@@ -221,11 +223,30 @@ lkp k m d = Map.findWithDefault d k m
 lkpS :: String -> Map String v -> v -> v
 lkpS = lkp
 
+escapeJson :: String -> String
+escapeJson = concatMap esc
+  where esc '"'  = "\\\""
+        esc '\\' = "\\\\"
+        esc '\n' = "\\n"
+        esc '\r' = "\\r"
+        esc '\t' = "\\t"
+        esc c | c < ' ' = ""
+              | otherwise = [c]
+
+escapeHtml :: String -> String
+escapeHtml = concatMap esc
+  where esc '<' = "&lt;"
+        esc '>' = "&gt;"
+        esc '&' = "&amp;"
+        esc '"' = "&quot;"
+        esc '\'' = "&#39;"
+        esc c = [c]
+
 json :: [(String, String)] -> ByteString
 json pairs = BS.pack $ "{" ++ go pairs ++ "}"
   where go [] = ""
-        go [(k,v)] = "\"" ++ k ++ "\":\"" ++ v ++ "\""
-        go ((k,v):xs) = "\"" ++ k ++ "\":\"" ++ v ++ "\"," ++ go xs
+        go [(k,v)] = "\"" ++ escapeJson k ++ "\":\"" ++ escapeJson v ++ "\""
+        go ((k,v):xs) = "\"" ++ escapeJson k ++ "\":\"" ++ escapeJson v ++ "\"," ++ go xs
 
 resp :: Int -> ByteString -> ByteString -> ByteString
 resp code contentType body = BS.concat
