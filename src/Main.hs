@@ -1322,7 +1322,7 @@ homePage = BS.pack $ unlines
   , "<br>"
   , "~~~"
   , "<br><br>"
-  , "<a href=\"mailto:hello@errors.garden\">hello@errors.garden</a>"
+  , "<a href=\"\">hello[@]domain</a>"
   , "</div>"
   , ""
   , "<div class=\"right\" id=\"ref\">"
